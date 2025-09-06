@@ -2,4 +2,4 @@
 
 评测系统不太完整，请大家发挥想象修改它，可以添加或改bug
 
-删除请先在https://nightly.paw.msgbyte.com/main/group/68bbe16d716fc6a38f88ea86/68bbe16d716fc6a38f88ea82报告,得到管理员同意后再删除文件
+删除请先在 ![Veyth OJ开发论坛](https://nightly.paw.msgbyte.com/main/group/68bbe16d716fc6a38f88ea86/68bbe16d716fc6a38f88ea82) 上报告,得到管理员同意后再删除文件
