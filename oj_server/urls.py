@@ -20,6 +20,7 @@ from judge import views
 
 urlpatterns = [
     path('api/', include('user.urls')),
+    path('admin/', admin.site.urls),
     path('judge/', views.evaluate_code, name='runcode'),
-    path('tests/', include('test_connect.urls'))
+    path('tests/', include('test_connect.urls')),
 ]
