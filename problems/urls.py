@@ -16,13 +16,8 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from judge import views as judge_views
-
+from . import views
 
 urlpatterns = [
-    path('api/', include('user.urls')),
-    path('admin/', admin.site.urls),
-    path('judge/', judge_views.evaluate_code, name='runcode'),
-    path('problems/', include('problems.urls')),
-    path('tests/', include('test_connect.urls')),
+    path('problems/', views.get_problems, name='get_problems')
 ]

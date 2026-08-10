@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-b%14v5d9bv^52f%w4m0_%esm8g130)m=t+)=rf(ldv!2j2+v!s
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ['127.0.0.1','localhost','120.55.185.165']
+ALLOWED_HOSTS = ['127.0.0.1','localhost','cqiming.pythonanywhere.com']
 
 
 # Application definition
@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'test_connect',
     'system',
+    'problems'
 ]
 
 MIDDLEWARE = [
@@ -130,8 +131,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'user.User'
 
 CORS_ALLOWED_ORIGINS = [
-    "http://120.55.185.165:3000",
-    "http://120.55.185.165",
+    "http://oj.cqiming.com"
 ]
 CORS_ALLOW_CREDENTIALS = True
 
