@@ -33,6 +33,6 @@ def login(request):
     user = authenticate(username=username, password=password)
     if user is not None:
         # 这里可以返回token或其他认证信息
-        return Response({'message': '登录成功'}, status=status.HTTP_200_OK)
+        return Response({'message': '登录成功', 'is_staff': user.is_staff}, status=status.HTTP_200_OK)
     else:
         return Response({'error': '用户名或密码错误'}, status=status.HTTP_401_UNAUTHORIZED)
