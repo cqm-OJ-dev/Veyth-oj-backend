@@ -1,61 +1,166 @@
-import subprocess
-import tempfile
-import docker
 import os
+import time
+import tempfile
+import subprocess
+from django.conf import settings
+import requests
 
-def run_in_sandbox(code, input_data=None):
+LANG_IMAGE_MAP = {
+    'c': ('gcc:13.2', 'gcc /code/main.c -o /code/main && /code/main'),
+    'cpp': ('gcc:13.2', 'g++ -std=c++17 /code/main.cpp -o /code/main && /code/main'),
+    'java': ('eclipse-temurin:21-jdk-jammy', 'javac /code/Main.java -d /code && java -cp /code Main'),
+    'python': ('python:3.11-slim', 'python3 /code/main.py'),
+    'python3': ('python:3.11-slim', 'python3 /code/main.py'),
+    'go': ('golang:1.22', 'cd /code && go run main.go'),
+    'javascript': ('node:20-alpine', 'node /code/main.js'),
+    'typescript': ('node:20-alpine', 'node -e \"require(\\'ts-node/register\\')\" /code/main.ts'),
+    'kotlin': ('azul/zulu-openjdk:21', 'kotlinc /code/main.kt -include-runtime -d /code/main.jar && java -jar /code/main.jar'),
+    'rust': ('rust:1.77', 'cd /code && rustc main.rs -o main && ./main'),
+    'csharp': ('mcr.microsoft.com/dotnet/sdk:8.0', 'cd /code && dotnet-script main.csx'),
+}
+
+LANG_EXTENSION = {
+    'c': 'c', 'cpp': 'cpp', 'java': 'java', 'python': 'py', 'python3': 'py',
+    'go': 'go', 'javascript': 'js', 'typescript': 'ts',
+    'kotlin': 'kt', 'rust': 'rs', 'csharp': 'csx',
+}
+
+def judge_via_service(language, code, test_cases, time_limit_ms, memory_limit_mb):
+    payload = {
+        "language": language,
+        "code": code,
+        "test_cases": [
+            {"input": tc['input'], "output": tc['expected_output']}
+            for tc in test_cases
+        ],
+        "time_limit_ms": int(time_limit_ms),
+        "memory_limit_mb": int(memory_limit_mb),
+    }
     try:
-        # 创建一个临时文件来保存代码
-        with tempfile.NamedTemporaryFile(suffix='.py', delete=False) as tmp_file:
-            tmp_file.write(code.encode('utf-8'))
-            tmp_filename = tmp_file.name
-
-        # 创建 Docker 客户端
-        client = docker.from_env()
-
-        # 运行容器
-        container = client.containers.run(
-            'python-sandbox',
-            command='python /code/script.py',
-            volumes={tmp_filename: {'bind': '/code/script.py', 'mode': 'ro'}},
-            remove=True,
-            mem_limit='100m',
-            nano_cpus=500000000,
-            stdin_open=True,
-            tty=True,
-            detach=True
+        resp = requests.post(
+            settings.JUDGE_SERVICE_URL,
+            json=payload,
+            timeout=max(30, len(test_cases) * 30 + 10),
         )
+        if resp.status_code != 200:
+            return None, f"judge service http {resp.status_code}: {resp.text[:200]}"
+        data = resp.json()
+        return data, None
+    except requests.RequestException as e:
+        return None, f"judge service unreachable: {str(e)[:200]}"
 
-        # 使用 subprocess 执行命令并传递输入
-        cmd = ['docker', 'exec', '-i', container.id, 'python', '/code/script.py']
-        process = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
+def _normalize_output(s):
+    return (s or "").replace("\r\n", "\n").rstrip()
 
-        # 传递输入并获取输出
-        stdout, stderr = process.communicate(input=input_data)
+def _run_single_case_local(language, code, input_data, time_limit_ms, memory_limit_mb):
+    if language not in LANG_IMAGE_MAP:
+        return {'status': 'Internal Error', 'stdout': '', 'stderr': f'unsupported: {language}',
+                'returncode': -1, 'time_ms': 0, 'wall_time_ms': 0}
 
-        # 清理临时文件
-        os.unlink(tmp_filename)
+    image, command = LANG_IMAGE_MAP[language]
+    ext = LANG_EXTENSION.get(language, 'txt')
+    filename = f'main.{ext}'
 
-        if process.returncode != 0:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        code_path = os.path.join(tmpdir, filename)
+        with open(code_path, 'w', encoding='utf-8') as f:
+            f.write(code)
+
+        start = time.perf_counter()
+        try:
+            completed = subprocess.run(
+                [
+                    'docker', 'run', '--rm',
+                    '--network', 'none',
+                    '--pids-limit', '256',
+                    '--read-only',
+                    '--tmpfs', '/tmp:rw,size=64m',
+                    f'--memory={memory_limit_mb}m',
+                    f'--cpus=0.5',
+                    '-v', f'{tmpdir}:/code:ro',
+                    '--entrypoint', 'sh',
+                    image,
+                    '-c', f"timeout {max(1, time_limit_ms / 1000):.3f} {command}"
+                ],
+                input=input_data or '',
+                capture_output=True,
+                text=True,
+                timeout=max(60, time_limit_ms * len(input_data or '') / 1000 + 10),
+            )
+            wall_ms = (time.perf_counter() - start) * 1000
+            rc = completed.returncode
+            stdout = completed.stdout
+            stderr = completed.stderr
+        
+            if rc == 124:
+                status = 'Time Limit Exceeded'
+            elif rc != 0:
+                if stderr and any(kw in stderr.lower() for kw in ['compile', 'error', 'syntax']):
+                    status = 'Compile Error'
+                else:
+                    status = 'Runtime Error'
+            else:
+                status = 'Running'
             return {
-                'returncode': process.returncode,
+                'status': status,
                 'stdout': stdout,
                 'stderr': stderr,
-                'error': 'Runtime error'
+                'returncode': rc,
+                'time_ms': wall_ms,
+                'wall_time_ms': wall_ms,
             }
+        except subprocess.TimeoutExpired:
+            return {'status': 'Time Limit Exceeded', 'stdout': '', 'stderr': 'timeout',
+                    'returncode': 124,
+                    'time_ms': time_limit_ms, 'wall_time_ms': time_limit_ms}
+        except Exception as e:
+            return {'status': 'Internal Error', 'stdout': '', 'stderr': str(e),
+                    'returncode': -1, 'time_ms': 0, 'wall_time_ms': 0}
 
-        return {
-            'returncode': process.returncode,
-            'stdout': stdout,
-            'stderr': stderr,
-            'success': True
-        }
+def run_judge_local(language, code, test_cases, time_limit_ms, memory_limit_mb):
+    results = []
+    passed = 0
+    total = len(test_cases)
+    for i, tc in enumerate(test_cases, 1):
+        r = _run_single_case_local(language, code, tc.get('input', ''), time_limit_ms, memory_limit_mb)
+        r['case'] = i
+        if r['status'] == 'Running':
+            if _normalize_output(r.get('stdout', '')) == _normalize_output(tc.get('expected_output', '')):
+                r['status'] = 'Accepted'
+                passed += 1
+            else:
+                r['status'] = 'Wrong Answer'
+        results.append(r)
 
-    except Exception as e:
-        return {'error': f'Sandbox error: {str(e)}'}
+    overall = 'Accepted' if passed == total and total > 0 else (
+        results[0]['status'] if results else 'Internal Error'
+    )
+    for r in results:
+        if r['status'] != 'Accepted':
+            overall = r['status']
+            break
+    return {
+        'status': overall,
+        'passed': passed,
+        'total': total,
+        'results': results,
+    }
+
+def judge_all(language, code, test_cases, time_limit_ms, memory_limit_mb):
+    if memory_limit_mb < 16:
+        memory_limit_mb = 16
+    if memory_limit_mb > 2048:
+        memory_limit_mb = 2048
+    if time_limit_ms <= 0:
+        time_limit_ms = settings.JUDGE_DEFAULT_TIME_LIMIT_MS
+
+    data, err = judge_via_service(language, code, test_cases, time_limit_ms, memory_limit_mb)
+    if data is not None:
+        return data
+    if getattr(settings, 'JUDGE_FALLBACK_LOCAL', True):
+        return run_judge_local(language, code, test_cases, time_limit_ms, memory_limit_mb)
+    return {'status': 'Internal Error', 'passed': 0, 'total': len(test_cases),
+            'results': [{'status': 'Internal Error', 'time_ms': 0, 'stdout': '',
+                         'stderr': err or '', 'returncode': -1,
+                         'wall_time_ms': 0, 'case': i + 1}
+                        for i in range(len(test_cases))]}
