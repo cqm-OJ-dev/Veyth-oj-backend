@@ -13,7 +13,7 @@ LANG_IMAGE_MAP = {
     'python3': ('python:3.11-slim', 'python3 /code/main.py'),
     'go': ('golang:1.22', 'cd /code && go run main.go'),
     'javascript': ('node:20-alpine', 'node /code/main.js'),
-    'typescript': ('node:20-alpine', 'node -e \"require(\\'ts-node/register\\')\" /code/main.ts'),
+    'typescript': ('node:20-alpine', 'npx --yes tsx /code/main.ts'),
     'kotlin': ('azul/zulu-openjdk:21', 'kotlinc /code/main.kt -include-runtime -d /code/main.jar && java -jar /code/main.jar'),
     'rust': ('rust:1.77', 'cd /code && rustc main.rs -o main && ./main'),
     'csharp': ('mcr.microsoft.com/dotnet/sdk:8.0', 'cd /code && dotnet-script main.csx'),
