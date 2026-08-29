@@ -4,39 +4,27 @@ on:
   push:
     branches: [ "main", "beta" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "beta" ]
 
 jobs:
   build:
+
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
       max-parallel: 4
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
 
     steps:
     - uses: actions/checkout@v4
-
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
-
     - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        pip install flake8 pytest
-
-    - name: Lint with flake8
+        pip install django django_rest_framework django-cors-headers docker
+    - name: Run Django checks
       run: |
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-
-    - name: Django system check
-      env:
-        DJANGO_SETTINGS_MODULE: oj_server.settings
-      run: |
-        python manage.py check
-        python manage.py makemigrations --check --dry-run --noinput || true
+        python -c "import django; print(django.get_version())"

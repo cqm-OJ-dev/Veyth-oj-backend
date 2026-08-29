@@ -91,7 +91,7 @@ def _run_single_case_local(language, code, input_data, time_limit_ms, memory_lim
             rc = completed.returncode
             stdout = completed.stdout
             stderr = completed.stderr
-
+        
             if rc == 124:
                 status = 'Time Limit Exceeded'
             elif rc != 0:
