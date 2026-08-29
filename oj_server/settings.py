@@ -40,9 +40,11 @@ INSTALLED_APPS = [
     'user',
     'rest_framework',
     'corsheaders',
+    'django_filters',
     'test_connect',
     'system',
-    'problems'
+    'problems',
+    'judge',
 ]
 
 MIDDLEWARE = [
@@ -156,3 +158,32 @@ CORS_ALLOW_HEADERS = [
     'x-csrftoken',
     'x-requested-with',
 ]
+
+JUDGE_SERVICE_URL = "http://judge.cqiming.com/api/v1/judgments/"
+JUDGE_FALLBACK_LOCAL = True
+JUDGE_DEFAULT_TIME_LIMIT_MS = 1000
+JUDGE_DEFAULT_MEMORY_LIMIT_MB = 256
+
+JUDGE_ALLOWED_LANGUAGES = [
+    'c',
+    'cpp',
+    'java',
+    'python',
+    'python3',
+    'go',
+    'javascript',
+    'typescript',
+    'kotlin',
+    'rust',
+    'csharp',
+]
+
+REST_FRAMEWORK = {
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.SearchFilter',
+        'rest_framework.filters.OrderingFilter',
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
+}
