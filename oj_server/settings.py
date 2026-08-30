@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,7 +21,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-b%14v5d9bv^52f%w4m0_%esm8g130)m=t+)=rf(ldv!2j2+v!s'
+# 生产环境通过 DJANGO_SECRET_KEY 环境变量注入；本地开发回退到 insecure 默认值
+SECRET_KEY = os.environ.get(
+    'DJANGO_SECRET_KEY',
+    'django-insecure-b%14v5d9bv^52f%w4m0_%esm8g130)m=t+)=rf(ldv!2j2+v!s'
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
@@ -133,7 +138,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'user.User'
 
 CORS_ALLOWED_ORIGINS = [
-    "http://oj.cqiming.com"
+    "http://oj.cqiming.com",
+    "https://oj.cqiming.com",
+    "https://beta.oj.cqiming.com",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
 ]
 CORS_ALLOW_CREDENTIALS = True
 
@@ -159,7 +168,11 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
 ]
 
-JUDGE_SERVICE_URL = "http://judge.cqiming.com/api/v1/judgments/"
+# 评测服务地址：生产用 https 避免混合内容错误；可通过环境变量覆盖
+JUDGE_SERVICE_URL = os.environ.get(
+    'JUDGE_SERVICE_URL',
+    "https://judge.cqiming.com/api/v1/judgments/"
+)
 JUDGE_FALLBACK_LOCAL = True
 JUDGE_DEFAULT_TIME_LIMIT_MS = 1000
 JUDGE_DEFAULT_MEMORY_LIMIT_MB = 256
